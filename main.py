@@ -38,10 +38,46 @@ from torch.utils.data import DataLoader
 
 global net
 
+def precision(y_true, y_pred):
+    # Calculates the precision
+    true_positives = torch.sum(torch.round(torch.clamp(y_true * y_pred, 0, 1)))
+    predicted_positives = torch.sum(torch.round(torch.clamp(y_pred, 0, 1)))
+    precision = true_positives / (predicted_positives + 1e-6)
+    return precision
+
+
+def recall(y_true, y_pred):
+    # Calculates the recall
+    true_positives = torch.sum(torch.round(torch.clamp(y_true * y_pred, 0, 1)))
+    possible_positives = torch.sum(torch.round(torch.clamp(y_true, 0, 1)))
+    recall = true_positives / (possible_positives + 1e-6)
+    return recall
+
+
+def fbeta_score(y_true, y_pred, beta=1):
+    # Calculate the F score, the weighted harmonic mean of precision and recall
+    if beta < 0:
+        raise ValueError('Lowest is zero')
+
+    # If there are no true positives fix the F score at 0 like sklearn
+    if torch.sum(torch.round(torch.clamp(y_true, 0, 1))) == 0:
+        return 0
+
+    p = precision(y_true, y_pred)
+    r = recall(y_true, y_pred)
+    bb = beta ** 2
+    fbeta_score = (1 + bb) * (p * r) / (bb * p + r + 1e-6)
+    return fbeta_score
+
+
+def fmeasure(y_true, y_pred):
+    # Calculates the f-measure, the harmonic mean of precision and recall
+    return fbeta_score(y_true, y_pred, beta=1)
+
 def main():
     parser=argparse.ArgumentParser()
-    parser.add_argument('--batch_size',type=int,default=10)
-    parser.add_argument('--epoch1', type=int, default=10)
+    parser.add_argument('--batch_size',type=int,default=6)
+    parser.add_argument('--epoch1', type=int, default=20)
     parser.add_argument('--epoch2', type=int, default=8)
     parser.add_argument('--image_size', default=(299,299))
     parser.add_argument('--path',type=str,default='/home/yuly/multiclass/PascalVOC')
@@ -64,7 +100,7 @@ def main():
     net = inceptionresnetv2(num_classes=20, pretrained='imagenet')
     net.to(device)
     #print([name for name,x in net.named_parameters()])
-    optimizer1 = torch.optim.Adam(net.last_linear1.parameters(),lr=1e-4)
+    optimizer1 = torch.optim.Adam(list(net.last_linear1.parameters())+list(net.old_module.last_linear.parameters()),lr=1e-3)
 
     # training
 
@@ -75,8 +111,10 @@ def main():
         # test_dataset = Pascal_dataset(opt, mode='test')
     # test_dataloader = DataLoader(dataset=test_dataset, batch_size=opt['batch_size'], shuffle=True)
 
+    max_f1 = 0
     for epoch in range(opt['epoch1']):
         net.train()
+        print('training procedure:')
         for imgs, labels in tqdm(train_dataloader):
             imgs = imgs.to(device)
             labels = labels.to(device)
@@ -89,7 +127,11 @@ def main():
             optimizer1.step()
         print("loss %f the %d step in total %d epochs finished"%(BCE_loss,epoch,opt['epoch1']))
         # test
-        acc = 0
+        print('\n')
+        print('testing procedure:')
+        f1 = []
+        pre = []
+        rec = []
         total = 0
         net.eval()
         for imgs, labels in tqdm(test_dataloader):
@@ -97,13 +139,23 @@ def main():
             labels = labels.to(device)
             
             y_pre = net(imgs)
-            total = total+torch.sum(labels.squeeze())
-            #print(y_pre[0])
-            y_pre = torch.round(y_pre)
-            zero = torch.zeros(y_pre.shape)
-            zero = zero.to(device)
-            M_and = torch.where(y_pre>0.5,labels,zero)
-            acc += torch.sum(M_and)
+
+            # total = total+torch.sum(labels.squeeze())
+            # #print(y_pre[0])
+            # y_pre = torch.round(y_pre)
+            # zero = torch.zeros(y_pre.shape)
+            # zero = zero.to(device)
+            # M_and = torch.where(y_pre>0.5,labels,zero)
+            # acc += torch.sum(M_and)
+            f1.append(fmeasure(labels,y_pre))
+            pre.append(precision(labels,y_pre))
+            rec.append(recall(labels,y_pre))
+        mf1 = np.mean(f1)
+        print("f1-score: %f  precision: %f   recall: %f "%(mf1,np.mean(pre),np.mean(rec)))
+        if mf1>max_f1:
+            torch.save(net,'best_model1.pth')
+            print('best model, saving…')
+
 
 
         print("accuracy  %f"%(acc/total))
