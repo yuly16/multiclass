@@ -19,7 +19,7 @@ from inceptionresnetv2 import *
 import numpy as np
 #import cv2
 import json
-
+from tqdm import tqdm
 #plt.switch_backend('agg')
 # %matplotlib inline
 
@@ -77,7 +77,7 @@ def main():
 
     for epoch in range(opt['epoch1']):
         net.train()
-        for imgs, labels in train_dataloader:
+        for imgs, labels in tqdm(train_dataloader):
             imgs = imgs.to(device)
             labels = labels.to(device)
             optimizer1.zero_grad()
@@ -92,7 +92,7 @@ def main():
         acc = 0
         total = 0
         net.eval()
-        for imgs, labels in test_dataloader:
+        for imgs, labels in tqdm(test_dataloader):
             imgs = imgs.to(device)
             labels = labels.to(device)
             
