@@ -76,7 +76,7 @@ def fmeasure(y_true, y_pred):
 
 def main():
     parser=argparse.ArgumentParser()
-    parser.add_argument('--batch_size',type=int,default=6)
+    parser.add_argument('--batch_size',type=int,default=16)
     parser.add_argument('--epoch1', type=int, default=20)
     parser.add_argument('--epoch2', type=int, default=8)
     parser.add_argument('--image_size', default=(299,299))
@@ -134,22 +134,24 @@ def main():
         rec = []
         total = 0
         net.eval()
-        for imgs, labels in tqdm(test_dataloader):
-            imgs = imgs.to(device)
-            labels = labels.to(device)
-            
-            y_pre = net(imgs)
+        with torch.no_grad():
+            for imgs, labels in tqdm(test_dataloader):
+                imgs = imgs.to(device)
+                labels = labels.to(device)
+                
+                y_pre = net(imgs)
 
-            # total = total+torch.sum(labels.squeeze())
-            # #print(y_pre[0])
-            # y_pre = torch.round(y_pre)
-            # zero = torch.zeros(y_pre.shape)
-            # zero = zero.to(device)
-            # M_and = torch.where(y_pre>0.5,labels,zero)
-            # acc += torch.sum(M_and)
-            f1.append(fmeasure(labels,y_pre))
-            pre.append(precision(labels,y_pre))
-            rec.append(recall(labels,y_pre))
+                # total = total+torch.sum(labels.squeeze())
+                # #print(y_pre[0])
+                # y_pre = torch.round(y_pre)
+                # zero = torch.zeros(y_pre.shape)
+                # zero = zero.to(device)
+                # M_and = torch.where(y_pre>0.5,labels,zero)
+                # acc += torch.sum(M_and)
+                f1.append(np.array(fmeasure(labels,y_pre).cpu()))
+                pre.append(np.array(precision(labels,y_pre).cpu()))
+                rec.append(np.array(recall(labels,y_pre).cpu()))
+
         mf1 = np.mean(f1)
         print("f1-score: %f  precision: %f   recall: %f "%(mf1,np.mean(pre),np.mean(rec)))
         if mf1>max_f1:
@@ -158,7 +160,6 @@ def main():
 
 
 
-        print("accuracy  %f"%(acc/total))
 
 
 
